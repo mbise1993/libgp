@@ -1,0 +1,4 @@
+_build
+cmake/conan
+.vs
+.vscode/tags
