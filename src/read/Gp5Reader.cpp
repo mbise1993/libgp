@@ -1,7 +1,6 @@
 #include "Gp5Reader.h"
 #include "StreamReader.h"
 #include "Model.h"
-#include <cstdint>
 #include <utility>
 
 namespace libgp
@@ -34,12 +33,13 @@ namespace libgp
 		song->octave = reader.readUnsignedInt();
 
 		auto midiChannels = readMidiChannels(reader);
-		auto directions = readDirections(reader);
+		auto directionSigns = readDirectionSigns(reader);
 
 		song->rseMasterEffects.reverb = reader.readUnsignedInt();
 
 		auto numMeasures = reader.readUnsignedInt();
 		auto numTracks = reader.readUnsignedInt();
+		readMeasureHeaders(numMeasures, *song, directionSigns, reader);
 
 		return std::unique_ptr<Song>(song);
 	}
@@ -111,7 +111,7 @@ namespace libgp
 
 		tempo.name = reader.readIntByteSizedString();
 		tempo.value = reader.readUnsignedInt();
-		tempo.isHidden = (version().major() == 5 && version().minor() == 0)
+		tempo.isHidden = (version().major() == 5 && version().minor() > 0)
 			? reader.readBoolean()
 			: false;
 
@@ -144,31 +144,146 @@ namespace libgp
 		return channels;
 	}
 
-	std::map<std::string, uint16_t> Gp5Reader::readDirections(StreamReader& reader) const
+	std::tuple<Gp5Reader::DirectionSigns, Gp5Reader::DirectionSigns> Gp5Reader::readDirectionSigns(StreamReader& reader) const
 	{
-		std::map<std::string, uint16_t> directions;
+		DirectionSigns signs;
+		signs["Coda"] = reader.readSignedShort();
+		signs["Double Coda"] = reader.readSignedShort();
+		signs["Segno"] = reader.readSignedShort();
+		signs["Segno Segno"] = reader.readSignedShort();
+		signs["Fine"] = reader.readSignedShort();
 
-		directions["Coda"] = reader.readUnsignedShort();
-		directions["Double Coda"] = reader.readUnsignedShort();
-		directions["Segno"] = reader.readUnsignedShort();
-		directions["Segno Segno"] = reader.readUnsignedShort();
-		directions["Fine"] = reader.readUnsignedShort();
+		DirectionSigns fromSigns;
+		fromSigns["Da Capo"] = reader.readSignedShort();
+		fromSigns["Da Capo al Coda"] = reader.readSignedShort();
+		fromSigns["Da Capo al Double Coda"] = reader.readSignedShort();
+		fromSigns["Da Capo al Fine"] = reader.readSignedShort();
+		fromSigns["Da Segno"] = reader.readSignedShort();
+		fromSigns["Da Segno al Coda"] = reader.readSignedShort();
+		fromSigns["Da Segno al Double Coda"] = reader.readSignedShort();
+		fromSigns["Da Segno al Fine"] = reader.readSignedShort();
+		fromSigns["Da Segno Segno"] = reader.readSignedShort();
+		fromSigns["Da Segno Segno al Coda"] = reader.readSignedShort();
+		fromSigns["Da Segno Segno al Double Coda"] = reader.readSignedShort();
+		fromSigns["Da Segno Segno al Fine"] = reader.readSignedShort();
+		fromSigns["Da Coda"] = reader.readSignedShort();
+		fromSigns["Da Double Coda"] = reader.readSignedShort();
 
-		directions["Da Capo"] = reader.readUnsignedShort();
-		directions["Da Capo al Coda"] = reader.readUnsignedShort();
-		directions["Da Capo al Double Coda"] = reader.readUnsignedShort();
-		directions["Da Capo al Fine"] = reader.readUnsignedShort();
-		directions["Da Segno"] = reader.readUnsignedShort();
-		directions["Da Segno al Coda"] = reader.readUnsignedShort();
-		directions["Da Segno al Double Coda"] = reader.readUnsignedShort();
-		directions["Da Segno al Fine"] = reader.readUnsignedShort();
-		directions["Da Segno Segno"] = reader.readUnsignedShort();
-		directions["Da Segno Segno al Coda"] = reader.readUnsignedShort();
-		directions["Da Segno Segno al Double Coda"] = reader.readUnsignedShort();
-		directions["Da Segno Segno al Fine"] = reader.readUnsignedShort();
-		directions["Da Coda"] = reader.readUnsignedShort();
-		directions["Da Double Coda"] = reader.readUnsignedShort();
+		return std::make_tuple(signs, fromSigns);
+	}
 
-		return directions;
+	void Gp5Reader::readMeasureHeaders(uint32_t numMeasures, Song& song, std::tuple<DirectionSigns, DirectionSigns> directionSigns, StreamReader& reader) const
+	{
+		std::optional<MeasureHeader> previous = std::nullopt;
+		for (auto i = 1; i <= numMeasures; ++i) {
+			auto header = readMeasureHeader(i, song, previous, reader);
+			song.measureHeaders.push_back(header);
+			previous = header;
+		}
+
+		auto signs = std::get<0>(directionSigns);
+		for (auto const&[sign, number] : signs) {
+			if (number > -1) {
+				song.measureHeaders[number - 1].direction = sign;
+			}
+		}
+
+		auto fromSigns = std::get<1>(directionSigns);
+		for (auto const&[sign, number] : fromSigns) {
+			if (number > -1) {
+				song.measureHeaders[number - 1].fromDirection = sign;
+			}
+		}
+	}
+
+	MeasureHeader Gp5Reader::readMeasureHeader(uint32_t number, Song& song, std::optional<MeasureHeader> previous, StreamReader& reader) const
+	{
+		if (previous != std::nullopt) {
+			reader.skip(1);
+		}
+
+		auto flags = reader.readUnsignedByte();
+		
+		MeasureHeader header;
+		header.number = number;
+		header.start = 0;
+		header.tempo = song.tempo.value;
+
+		if (flags & 0x01) {
+			header.timeSignature.numerator = reader.readSignedByte();
+		} else {
+			header.timeSignature.numerator = previous->timeSignature.numerator;
+		}
+
+		if (flags & 0x02) {
+			header.timeSignature.denominator = reader.readSignedByte();
+		} else {
+			header.timeSignature.denominator = previous->timeSignature.denominator;
+		}
+
+		header.isRepeatOpen = static_cast<bool>(flags & 0x04);
+
+		if (flags & 0x08) {
+			header.repeatClose = reader.readSignedByte();
+		}
+
+		if (flags & 0x10) {
+			header.repeatAlternative = reader.readUnsignedByte();
+		}
+
+		if (flags & 0x20) {
+			header.marker = readMarker(reader);
+		}
+
+		if (flags & 0x40) {
+			auto root = reader.readSignedByte();
+			auto type = reader.readSignedByte();
+			header.keySignature = static_cast<KeySignature>(root);
+		} else if (header.number > 1) {
+			header.keySignature = previous->keySignature;
+		}
+
+		header.hasDoubleBar = static_cast<bool>(flags & 0x80);
+
+		if (header.repeatClose > -1) {
+			header.repeatClose--;
+		}
+
+		if (flags & 0x03) {
+			header.timeSignature.beams = {
+				reader.readUnsignedByte(),
+				reader.readUnsignedByte(),
+				reader.readUnsignedByte(),
+				reader.readUnsignedByte()
+			};
+		} else {
+			header.timeSignature.beams = previous->timeSignature.beams;
+		}
+
+		if (flags & 0x10 == 0) {
+			reader.skip(1);
+		}
+
+		header.tripletFeel = static_cast<TripletFeel>(reader.readUnsignedByte());
+
+		return header;
+	}
+
+	Marker Gp5Reader::readMarker(StreamReader& reader) const
+	{
+		Marker marker;
+		marker.title = reader.readIntByteSizedString();
+		marker.color = readColor(reader);
+		return marker;
+	}
+
+	Color Gp5Reader::readColor(StreamReader& reader) const
+	{
+		Color color;
+		color.red = reader.readUnsignedByte();
+		color.green = reader.readUnsignedByte();
+		color.blue = reader.readUnsignedByte();
+		reader.skip(1);
+		return color;
 	}
 }

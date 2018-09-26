@@ -45,6 +45,44 @@ namespace libgp
 
 	bool MidiChannel::isPercussionChannel() const noexcept { return channel % 16 == DEFAULT_PERCUSSION_CHANNEL; }
 
+	Duration::Duration() :
+		value(Quarter)
+	{
+
+	}
+
+	TimeSignature::TimeSignature() :
+		numerator(4),
+		denominator(4),
+		beams({2, 2, 2, 2})
+	{
+
+	}
+
+	Color::Color() :
+		red(255),
+		green(0),
+		blue(0),
+		alpha(1)
+	{
+
+	}
+
+	MeasureHeader::MeasureHeader() :
+		start(Duration::QuarterTime),
+		hasDoubleBar(false),
+		keySignature(KeySignature::CMajor),
+		tempo(120),
+		isRepeatOpen(false),
+		repeatAlternative(0),
+		repeatClose(-1),
+		tripletFeel(TripletFeel::None),
+		direction(""),
+		fromDirection("")
+	{
+
+	}
+
 	bool operator==(const LyricLine& lhs, const LyricLine& rhs) 
 	{
 		return lhs.startingMeasure == rhs.startingMeasure
@@ -101,6 +139,58 @@ namespace libgp
 	{
 		return lhs.volume == rhs.volume
 			&& lhs.reverb == rhs.reverb;
+	}
+
+	bool operator==(const Tuplet& lhs, const Tuplet& rhs)
+	{
+		return lhs.time == rhs.time
+			&& lhs.enters == rhs.enters;
+	}
+
+	bool operator==(const Duration& lhs, const Duration& rhs)
+	{
+		return lhs.value == rhs.value
+			&& lhs.isDotted == rhs.isDotted
+			&& lhs.isDoubleDotted == rhs.isDoubleDotted
+			&& lhs.tuplet == rhs.tuplet;
+	}
+
+	bool operator==(const TimeSignature& lhs, const TimeSignature& rhs)
+	{
+		return lhs.numerator == rhs.numerator
+			&& lhs.denominator == rhs.denominator
+			&& lhs.beams == rhs.beams;
+	}
+
+	bool operator==(const Color& lhs, const Color& rhs)
+	{
+		return lhs.red == rhs.red
+			&& lhs.green == rhs.green
+			&& lhs.blue == rhs.blue
+			&& lhs.alpha == rhs.alpha;
+	}
+
+	bool operator==(const Marker& lhs, const Marker& rhs)
+	{
+		return lhs.title == rhs.title
+			&& lhs.color == rhs.color;
+	}
+
+	bool operator==(const MeasureHeader& lhs, const MeasureHeader& rhs)
+	{
+		return lhs.number == rhs.number
+			&& lhs.start == rhs.start
+			&& lhs.hasDoubleBar == rhs.hasDoubleBar
+			&& lhs.keySignature == rhs.keySignature
+			&& lhs.timeSignature == rhs.timeSignature
+			&& lhs.tempo == rhs.tempo
+			&& lhs.marker == rhs.marker
+			&& lhs.isRepeatOpen == rhs.isRepeatOpen
+			&& lhs.repeatAlternative == rhs.repeatAlternative
+			&& lhs.repeatClose == rhs.repeatClose
+			&& lhs.tripletFeel == rhs.tripletFeel
+			&& lhs.direction == rhs.direction
+			&& lhs.fromDirection == rhs.fromDirection;
 	}
 
 	bool operator==(const Song& lhs, const Song& rhs)

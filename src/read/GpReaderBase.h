@@ -1,6 +1,7 @@
 #pragma once
 
 #include "../GpVersion.h"
+#include "StreamReader.h"
 #include <string>
 #include <istream>
 #include <memory>
@@ -9,7 +10,6 @@
 namespace libgp
 {
 	struct Song;
-	class StreamReader;
 
 	class GpReaderBase
 	{

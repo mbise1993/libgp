@@ -88,6 +88,16 @@ SCENARIO("Can read a Guitar Pro 5 file")
 			{
 				REQUIRE(song->keySignature == expectedSong->keySignature);
 			}
+
+			THEN("The octave is correct")
+			{
+				REQUIRE(song->octave == expectedSong->octave);
+			}
+
+			THEN("The measure headers are correct")
+			{
+				REQUIRE(song->measureHeaders == expectedSong->measureHeaders);
+			}
 		}
 	}
 }
@@ -120,6 +130,16 @@ std::unique_ptr<Song> createExpectedSong()
 	song->tempo.isHidden = false;
 
 	song->keySignature = KeySignature::CMajor;
+	song->octave = 0;
+
+	MeasureHeader header;
+	header.number = 1;
+	header.start = 0;
+	header.tempo = song->tempo.value;
+	header.timeSignature.numerator = 4;
+	header.timeSignature.denominator = 4;
+	header.keySignature = KeySignature::GMajor;
+	song->measureHeaders.push_back(header);
 
 	return song;
 }
