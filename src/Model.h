@@ -3,6 +3,7 @@
 #include <cstdint>
 #include <string>
 #include <vector>
+#include <optional>
 
 namespace libgp
 {
@@ -92,27 +93,24 @@ namespace libgp
 	{
 		uint8_t channel;
 		uint8_t effectChannel;
-		uint32_t instrument;
+		int32_t instrument;
 		int16_t volume;
 		int16_t balance;
 		int16_t chorus;
 		int16_t reverb;
 		int16_t phaser;
 		int16_t tremolo;
+		uint8_t bank;
 
 		bool isPercussionChannel() const noexcept;
-	};
-
-	struct RSEMasterEffects
-	{
-		uint8_t volume;
-		uint32_t reverb;
 	};
 
 	struct Tuplet
 	{
 		uint8_t enters;
-		uint8_t time;
+		uint8_t times;
+
+		uint32_t convertTime(uint32_t time) const;
 	};
 
 	struct Duration
@@ -134,12 +132,14 @@ namespace libgp
 		Tuplet tuplet;
 
 		Duration();
+
+		uint32_t calcTime() const;
 	};
 
 	struct TimeSignature
 	{
 		int8_t numerator;
-		int8_t denominator;
+		Duration denominator;
 		std::vector<uint8_t> beams;
 
 		TimeSignature();
@@ -183,6 +183,7 @@ namespace libgp
 		std::string fromDirection;
 
 		MeasureHeader();
+		uint32_t calcLength() const;
 	};
 
 	enum class Clef : uint8_t
@@ -362,6 +363,100 @@ namespace libgp
 		Popping = 3
 	};
 
+	enum class ChordType : uint8_t
+	{
+		Major = 0,
+		Seventh = 1,
+		MajorSeventh = 2,
+		Sixth = 3,
+		Minor = 4,
+		MinorSeventh = 5,
+		MinorMajor = 6,
+		MinorSixth = 7,
+		SuspendedSecond = 8,
+		SuspendedFourth = 9,
+		SeventhSuspendedSecond = 10,
+		SeventhSuspendedFourth = 11,
+		Diminished = 12,
+		Augmented = 13,
+		Power = 14
+	};
+
+	enum class ChordExtension : uint8_t
+	{
+		None = 0,
+		Ninth = 1,
+		Eleventh = 2,
+		Thirteenth = 3
+	};
+
+	struct GuitarString
+	{
+		uint8_t number;
+		uint8_t value;
+	};
+
+	struct Barre
+	{
+		uint8_t fret;
+		uint8_t start;
+		uint8_t end;
+	};
+
+	struct Chord
+	{
+		uint8_t length;
+		bool isSharp;
+		uint8_t root;
+		ChordType type;
+		ChordExtension extension;
+		uint8_t bass;
+		uint8_t tonality;
+		uint8_t add;
+		std::string name;
+		uint8_t fifth;
+		uint8_t ninth;
+		uint8_t eleventh;
+		uint32_t firstFret;
+		std::vector<int32_t> strings;
+		std::vector<Barre> barres;
+		std::vector<bool> omissions;
+		std::vector<Fingering> fingerings;
+		uint8_t show;
+		uint8_t isNewFormat;
+	};
+
+	struct WahEffect
+	{
+		int8_t value = -1;
+		bool display = false;
+	};
+
+	struct RSEInstrument
+	{
+		int32_t instrument = -1;
+		uint32_t unknown = 1;
+		int32_t soundBank = -1;
+		int32_t effectNumber = -1;
+		std::string effectCategory;
+		std::string effect;
+	};
+
+	struct MixTableChange
+	{
+		uint8_t instrument;
+		RSEInstrument rse;
+		uint8_t volume;
+		uint8_t balance;
+		uint8_t chorus;
+		uint8_t reverb;
+		uint8_t phaser;
+		uint8_t tremolo;
+		Tempo tempo;
+		WahEffect wah;
+		bool useRSE;
+	};
+
 	struct BeatEffect
 	{
 		BeatStroke stroke;
@@ -369,10 +464,10 @@ namespace libgp
 		BeatStrokeDirection pickStroke;
 		Chord chord;
 		bool hasFadeIn;
-		TremoloBar tremoloBar;
+		Bend tremoloBar;
 		MixTableChange mixTableChange;
 		SlapEffect slapEffect;
-		Vibrato vibrato;
+		uint8_t vibrato;
 	};
 
 	enum class Octave : uint8_t
@@ -422,10 +517,14 @@ namespace libgp
 		BeatStatus status;
 	};
 
+	struct Measure;
 	struct Voice
 	{
+		Measure& measure;
 		std::vector<Beat> beats;
 		VoiceDirection direction;
+
+		explicit Voice(Measure& measure);
 	};
 
 	enum class LineBreak : uint8_t
@@ -435,20 +534,63 @@ namespace libgp
 		Protect = 2
 	};
 
+	struct Track;
 	struct Measure
 	{
 		static const uint8_t MaxVoices = 2;
 
-		MeasureHeader header;
+		Track& track;
+		MeasureHeader& header;
 		Clef clef;
 		std::vector<Voice> voices;
 		LineBreak lineBreak;
+
+		Measure(Track& track, MeasureHeader& header);
+	};
+
+	struct TrackSettings
+	{
+		bool showTablature = true;
+		bool showNotation = true;
+		bool diagramsAreBelow = false;
+		bool showRhythm = false;
+		bool forceHorizontal = false;
+		bool forceChannels = false;
+		bool showDiagramList = true;
+		bool showDiagramsInScore = false;
+		bool autoLetRing = false;
+		bool autoBrush = false;
+		bool extendRhythmic = false;
+	};
+
+	struct RSEEqualizer
+	{
+		std::vector<float> knobs;
+		float gain;
+	};
+
+	enum class Accentuation : uint8_t
+	{
+		None = 0,
+		VerySoft = 1,
+		Soft = 2,
+		Medium = 3,
+		Strong = 4,
+		VeryStrong = 5
+	};
+
+	struct TrackRSE
+	{
+		RSEInstrument instrument;
+		RSEEqualizer equalizer;
+		uint8_t humanize;
+		Accentuation autoAccentuation;
 	};
 
 	struct Track
 	{
 		uint32_t number;
-		uint8_t fretCount;
+		uint32_t numFrets;
 		uint32_t offset;
 		bool isPercussionTrack;
 		bool is12StringGuitarTrack;
@@ -458,7 +600,21 @@ namespace libgp
 		bool isMute;
 		bool indicateTuning;
 		std::string name;
+		std::vector<Measure> measures;
+		std::vector<GuitarString> strings;
+		uint8_t port;
+		std::optional<MidiChannel> channel;
+		Color color;
+		TrackSettings settings;
+		bool useRSE;
+		TrackRSE rse;
+	};
 
+	struct RSEMasterEffect
+	{
+		uint8_t volume;
+		uint32_t reverb;
+		RSEEqualizer equalizer;
 	};
 
 	struct Song
@@ -474,13 +630,14 @@ namespace libgp
 		std::string instructions;
 		std::vector<std::string> comments;
 
-		RSEMasterEffects rseMasterEffects;
+		RSEMasterEffect masterEffect;
 		Lyrics lyrics;
 		PageSetup pageSetup;
 		Tempo tempo;
 		KeySignature keySignature;
 		uint32_t octave;
 		std::vector<MeasureHeader> measureHeaders;
+		std::vector<Track> tracks;
 	};
 
 	bool operator==(const Lyrics& lhs, const Lyrics& rhs);
@@ -488,7 +645,8 @@ namespace libgp
 	bool operator==(const PageSetup& lhs, const PageSetup& rhs);
 	bool operator==(const Tempo& lhs, const Tempo& rhs);
 	bool operator==(const MidiChannel& lhs, const MidiChannel& rhs);
-	bool operator==(const RSEMasterEffects& lhs, const RSEMasterEffects& rhs);
+	bool operator==(const RSEEqualizer& lhs, const RSEEqualizer& rhs);
+	bool operator==(const RSEMasterEffect& lhs, const RSEMasterEffect& rhs);
 	bool operator==(const Tuplet& lhs, const Tuplet& rhs);
 	bool operator==(const Duration& lhs, const Duration& rhs);
 	bool operator==(const TimeSignature& lhs, const TimeSignature& rhs);

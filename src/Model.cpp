@@ -45,15 +45,28 @@ namespace libgp
 
 	bool MidiChannel::isPercussionChannel() const noexcept { return channel % 16 == DEFAULT_PERCUSSION_CHANNEL; }
 
+	uint32_t Tuplet::convertTime(uint32_t time) const { return time * times / enters; }
+
 	Duration::Duration() :
 		value(Quarter)
 	{
 
 	}
 
+	uint32_t Duration::calcTime() const
+	{
+		auto result = static_cast<uint32_t>(QuarterTime * (4.0 / value));
+		if (isDotted) {
+			result += result / 2;
+		} else if (isDoubleDotted) {
+			result += (result / 4) * 3;
+		}
+
+		return tuplet.convertTime(result);
+	}
+
 	TimeSignature::TimeSignature() :
 		numerator(4),
-		denominator(4),
 		beams({2, 2, 2, 2})
 	{
 
@@ -81,6 +94,23 @@ namespace libgp
 		fromDirection("")
 	{
 
+	}
+
+	uint32_t MeasureHeader::calcLength() const { return timeSignature.numerator * timeSignature.denominator.calcTime(); }
+
+	Voice::Voice(Measure& measure) :
+		measure(measure)
+	{
+
+	}
+
+	Measure::Measure(Track& track, MeasureHeader& header) :
+		track(track),
+		header(header)
+	{
+		for (auto i = 0; i < MaxVoices; ++i) {
+			voices.push_back(Voice(*this));
+		}
 	}
 
 	bool operator==(const LyricLine& lhs, const LyricLine& rhs) 
@@ -135,15 +165,22 @@ namespace libgp
 			&& lhs.tremolo == rhs.tremolo;
 	}
 
-	bool operator==(const RSEMasterEffects& lhs, const RSEMasterEffects& rhs)
+	bool operator==(const RSEEqualizer& lhs, const RSEEqualizer& rhs)
+	{
+		return lhs.gain == rhs.gain
+			&& lhs.knobs == rhs.knobs;
+	}
+
+	bool operator==(const RSEMasterEffect& lhs, const RSEMasterEffect& rhs)
 	{
 		return lhs.volume == rhs.volume
-			&& lhs.reverb == rhs.reverb;
+			&& lhs.reverb == rhs.reverb
+			&& lhs.equalizer == rhs.equalizer;
 	}
 
 	bool operator==(const Tuplet& lhs, const Tuplet& rhs)
 	{
-		return lhs.time == rhs.time
+		return lhs.times == rhs.times
 			&& lhs.enters == rhs.enters;
 	}
 
